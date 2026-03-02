@@ -360,7 +360,7 @@ function FireworksComp({ active }) {
     let ps = [], bu = 0, run = true;
     function burst(x, y) { for (let i = 0; i < 45; i++) { const a = Math.random() * Math.PI * 2, sp = 1.5 + Math.random() * 4; ps.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 2, life: 1, decay: .012 + Math.random() * .018, color: cols[Math.floor(Math.random() * cols.length)], size: 1.5 + Math.random() * 2.5 }) } }
     const bi = setInterval(() => { if (bu < 6) { burst(80 + Math.random() * 460, 60 + Math.random() * 200); bu++ } else clearInterval(bi) }, 250);
-    function draw() { if (!run) return; c.clearRect(0, 0, W, H); for (let i = ps.length - 1; i >= 0; i--) { const p = ps[i]; p.x += p.vx; p.y += p.vy; p.vy += .04; p.vx *= .99; p.life -= p.decay; if (p.life <= 0) { ps.splice(i, 1); continue } c.beginPath(); c.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2); c.fillStyle = p.color; c.globalAlpha = p.life; c.fill(); c.globalAlpha = 1 } if (ps.length > 0 || bu < 6) requestAnimationFrame(draw) }
+    function draw() { if (!run) return; c.clearRect(0, 0, W, H); for (let i = ps.length - 1; i >= 0; i--) { const p = ps[i]; p.x += p.vx; p.y += p.vy; p.vy += .04; p.vx *= .99; p.life -= p.decay; if (p.life <= 0) { ps[i] = ps[ps.length - 1]; ps.pop(); continue } c.beginPath(); c.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2); c.fillStyle = p.color; c.globalAlpha = p.life; c.fill(); c.globalAlpha = 1 } if (ps.length > 0 || bu < 6) requestAnimationFrame(draw) }
     draw(); return () => { run = false; clearInterval(bi) }
   }, [active]);
   return active ? <canvas ref={ref} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 50 }} /> : null;
@@ -378,13 +378,15 @@ function MiniCard({ card, style }) {
   );
 }
 
+const CARD_AREA_STYLES = `
+  @keyframes riffleLeft { 0% { transform: translateX(-80px) rotate(-20deg) scale(0.9); opacity: 0; } 15% { transform: translateX(-50px) rotate(-15deg) scale(1); opacity: 1; } 40% { transform: translateX(-40px) rotate(-10deg); } 60% { transform: translateX(0px) rotate(0deg); } 100% { transform: translateX(0px) rotate(0deg); opacity: 1; } }
+  @keyframes riffleRight { 0% { transform: translateX(80px) rotate(20deg) scale(0.9); opacity: 0; } 15% { transform: translateX(50px) rotate(15deg) scale(1); opacity: 1; } 40% { transform: translateX(40px) rotate(10deg); } 60% { transform: translateX(0px) rotate(0deg); } 100% { transform: translateX(0px) rotate(0deg); opacity: 1; } }
+`;
+
 function CardAreaComp({ drawnPile, dispensedCard, dispensing, onDraw, canDraw, autoPlay, gameOver, shuffling, shuffleCards }) {
   return (
     <div className="flex items-start gap-8 justify-center flex-wrap p-2 relative font-sans min-h-[140px]">
-      <style>{`
-        @keyframes riffleLeft { 0% { transform: translateX(-80px) rotate(-20deg) scale(0.9); opacity: 0; } 15% { transform: translateX(-50px) rotate(-15deg) scale(1); opacity: 1; } 40% { transform: translateX(-40px) rotate(-10deg); } 60% { transform: translateX(0px) rotate(0deg); } 100% { transform: translateX(0px) rotate(0deg); opacity: 1; } }
-        @keyframes riffleRight { 0% { transform: translateX(80px) rotate(20deg) scale(0.9); opacity: 0; } 15% { transform: translateX(50px) rotate(15deg) scale(1); opacity: 1; } 40% { transform: translateX(40px) rotate(10deg); } 60% { transform: translateX(0px) rotate(0deg); } 100% { transform: translateX(0px) rotate(0deg); opacity: 1; } }
-      `}</style>
+      <style>{CARD_AREA_STYLES}</style>
       {shuffling && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-gray-100/95 rounded-xl font-bold text-blue-900 shadow-inner">
           <div className="flex flex-col items-center gap-2 text-center">
@@ -412,11 +414,11 @@ function CardAreaComp({ drawnPile, dispensedCard, dispensing, onDraw, canDraw, a
       <div className="min-w-[90px] pt-4">
         <div className="text-[10px] text-gray-400 font-bold uppercase mb-2 tracking-widest text-center">Inning Stack ({drawnPile.length})</div>
         <div className="relative w-16 h-24 mx-auto">
-            {drawnPile.map((card, i) => ( 
-                <div key={i} className="absolute transition-all duration-200" style={{ top: Math.min(i * 0.6, 12), left: (i % 3) * 0.8, zIndex: i }}>
+            {drawnPile.slice(-5).map((card, i) => { const gi = drawnPile.length - 5 + i; return (
+                <div key={gi} className="absolute transition-all duration-200" style={{ top: Math.min(i * 0.6, 12), left: (i % 3) * 0.8, zIndex: i }}>
                     <MiniCard card={card} style={{ width: 50, height: 70, fontSize: 10 }} />
-                </div> 
-            ))}
+                </div>
+            ); })}
         </div>
       </div>
     </div>
@@ -476,7 +478,7 @@ function BaseballField({ bases, defColor, offColor, ballPos, pitchPhase, batterP
         <path d={dp} fill="#c9a25c" opacity=".7" /><circle cx={310} cy={350} r={42} fill="#4ab82a" opacity=".5" /><polygon points={`${hp.x},${hp.y + 6} ${hp.x - 7},${hp.y + 1} ${hp.x - 7},${hp.y - 3} ${hp.x + 7},${hp.y - 3} ${hp.x + 7},${hp.y - 3} ${hp.x + 7},${hp.y + 1}`} fill="#fff" />
       </>
     );
-  }, [hp]);
+  }, []);
   return (
     <div className="relative w-full max-w-[750px] mx-auto overflow-hidden rounded-xl shadow-2xl">
       <FireworksComp active={showFW} key={`fw-${fwKey}`} />
@@ -520,7 +522,6 @@ function BaseballCardGameInner() {
   const [drawnPile, setDrawnPile] = useState([]);
   const [dispensedCard, setDispensedCard] = useState(null);
   const [dispensing, setDispensing] = useState(false);
-  const [outcome, setOutcome] = useState(null);
   const [showFW, setShowFW] = useState(false);
   const [fwKey, setFwKey] = useState(0);
   const [shuffling, setShuffling] = useState(false);
@@ -553,6 +554,7 @@ function BaseballCardGameInner() {
   useEffect(() => { if (!autoPlay || phase !== 'playing') return; const id = setInterval(() => { if (procRef.current || gs.current.gameOver) return; doDrawCard(); }, autoSpeed); return () => clearInterval(id); }, [autoPlay, autoSpeed, phase]);
 
   function rerender() { setRenderTick(t => t + 1); }
+  function triggerFireworks() { setShowFW(true); setFwKey(k => k + 1); setTimeout(() => setShowFW(false), 4500); }
   function addLog(text, type = 'play') { setLog(p => [...p, { text, type }]); }
   function shuffleDeck() { deckRef.current = createDeck(); deckIdxRef.current = 0 };
 
@@ -597,7 +599,7 @@ function BaseballCardGameInner() {
 
   function doShuffleAnimation(onComplete) {
     setShuffling(true); const samples = [];
-    for (let i = 0; i < 24; i++) samples.push({ value: VALUES[Math.floor(Math.random() * 13)], suit: SUITS[Math.floor(Math.random() * 4)], key: `S${i}` });
+    for (let i = 0; i < 24; i++) samples.push({ value: pick(VALUES), suit: pick(SUITS), key: `S${i}` });
     setShuffleCards(samples);
     if (sndRef.current) { playSoundLocal('cardFlip'); setTimeout(() => playSoundLocal('cardFlip'), 400); setTimeout(() => playSoundLocal('cardFlip'), 800); }
     setTimeout(() => { setShuffling(false); setShuffleCards([]); if (onComplete) onComplete(); }, 2600);
@@ -607,7 +609,7 @@ function BaseballCardGameInner() {
     if (!teams[0].name || !teams[1].name) return;
     gs.current = INIT_GS(); statsRef.current = INIT_STATS(teams);
     setLog([{ text: `⚾ Play Ball! ${teams[0].name} at ${teams[1].name}`, type: 'info' }]);
-    setPlayHistory([]); setReplayIdx(-1); setHalfStartIdx(0); setDrawnPile([]); setDispensedCard(null); setDispensing(false); setOutcome(null); setShowFW(false); setAutoPlay(false); setBallPos(null); setPitchPhase('idle'); setBatterPhase('stance'); setAnnounceText(''); setActiveBatter(teams[0].players[0]); shuffleDeck(); setPhase('playing'); rerender();
+    setPlayHistory([]); setReplayIdx(-1); setHalfStartIdx(0); setDrawnPile([]); setDispensedCard(null); setDispensing(false); setShowFW(false); setAutoPlay(false); setBallPos(null); setPitchPhase('idle'); setBatterPhase('stance'); setAnnounceText(''); setActiveBatter(teams[0].players[0]); shuffleDeck(); setPhase('playing'); rerender();
   }
 
   function doDrawCard() {
@@ -654,7 +656,7 @@ function BaseballCardGameInner() {
       }, 1050);
       
       setTimeout(() => {
-        setPitchPhase('idle'); setOutcome(oc);
+        setPitchPhase('idle');
         const ba = genBallAnimLocal(oc, nar.dir, nar.sub, nar.variant);
         const isH = ['single', 'double', 'triple', 'error'].includes(oc), isG = ['groundOut', 'doublePlay'].includes(oc);
         if (['flyOut', 'lineOut', 'foulOut'].includes(oc)) {
@@ -693,13 +695,14 @@ function BaseballCardGameInner() {
     else if (doesSwing(oc) || ['walk', 'hbp'].includes(oc)) bD = true;
     if (bD) { S.ab++; if (['single', 'double', 'triple', 'homeRun'].includes(oc)) { S.h++; if (oc === 'homeRun') S.hr++; g.hits[bt]++; } g.count = { balls: 0, strikes: 0 }; g.batterIdx[bt] = (g.batterIdx[bt] + 1) % 9; }
     if (res.runs > 0) g.innings[bt][g.innings[bt].length - 1] += res.runs;
-    if (oc === 'homeRun') { setShowFW(true); setFwKey(k => k + 1); setTimeout(() => setShowFW(false), 4500); }
+    if (oc === 'homeRun') triggerFireworks();
     const aS = g.innings[0].reduce((a, b) => a + b, 0), hS = g.innings[1].reduce((a, b) => a + b, 0);
     if (nO >= 3 && g.inning >= 9 && g.half === 0 && hS > aS) { g.gameOver = true; g.message = `${teams[1].name} wins!`; } 
     else if (g.inning >= 9 && g.half === 1 && hS > aS) { g.gameOver = true; g.message = `${teams[1].name} wins on a walk-off!`; }
     else if (nO >= 3 && g.inning >= 9 && g.half === 1 && aS !== hS) { g.gameOver = true; g.message = aS > hS ? `${teams[0].name} wins!` : `${teams[1].name} wins!`; }
     addLog(nar.text, oc === 'homeRun' ? 'homer' : 'play');
-    const cp = [...drawnPile, card]; setDrawnPile(cp);
+    let cp;
+    setDrawnPile(prev => { cp = [...prev, card]; return cp; });
     setPlayHistory(p => [...p, { card, outcome: oc, narration: nar.text, dir: nar.dir, sub: nar.sub, variant: nar.variant, isHR: oc === 'homeRun', batter: bat, preBases: [...g.bases], team: bt, resultData: res, pileSnapshot: cp }]);
     g.bases = res.nextBases; g.outs = nO;
     if (g.gameOver) { procRef.current = false; rerender(); return; }
@@ -711,7 +714,7 @@ function BaseballCardGameInner() {
     const g = gs.current;
     if (g.half === 1) { g.inning++; g.half = 0; g.innings[0].push(0); g.innings[1].push(0); } else g.half = 1;
     g.outs = 0; g.bases = [null, null, null]; g.count = { balls: 0, strikes: 0 };
-    setDrawnPile([]); setOutcome(null); setReplayIdx(-1); setHalfStartIdx(playHistory.length); rerender();
+    setDrawnPile([]); setReplayIdx(-1); setHalfStartIdx(playHistory.length); rerender();
     doShuffleAnimation(() => { setActiveBatter(teams[g.half].players[g.batterIdx[g.half]]); shuffleDeck(); procRef.current = false; rerender(); });
   }
 
@@ -721,17 +724,17 @@ function BaseballCardGameInner() {
     const p = playHistory[idx], bt = p.team;
     setDispensedCard(p.card); setDispensing(false); setTimeout(() => setDispensing(true), 30);
     setDrawnPile(p.pileSnapshot || []);
-    setOutcome(null); setAnnounceText(''); setPitchPhase('windup'); setBatterPhase('stance'); setActiveBatter(p.batter);
+    setAnnounceText(''); setPitchPhase('windup'); setBatterPhase('stance'); setActiveBatter(p.batter);
     setTimeout(() => { setPitchPhase('throw'); animateBall(linePts(F.P, { x: F.HP.x, y: F.HP.y - 5 }, 16), 550); }, 550);
     setTimeout(() => { if (doesSwing(p.outcome)) { setBatterPhase('swing'); if (sndRef.current && !['ball', 'strike', 'walk', 'hbp'].includes(p.outcome)) playSoundLocal('hit'); animateRunners(computeRunnerPaths([...p.preBases], p.outcome), bt === 0 ? '#b91c1c' : '#1e40af', p.outcome === 'homeRun' ? 6500 : 2500); } }, 1050);
     setTimeout(() => {
-      setPitchPhase('idle'); setOutcome(p.outcome); setAnnounceText(p.narration);
+      setPitchPhase('idle'); setAnnounceText(p.narration);
       const ba = genBallAnimLocal(p.outcome, p.dir, p.sub, p.variant);
       if (['flyOut', 'lineOut', 'foulOut'].includes(p.outcome)) { const fk = (p.outcome === 'foulOut') ? 'C' : (OF_MAP[p.sub] || INF_MAP[p.sub]); if (fk) animateFielder(fk, F[fk], ba.target, ba.dur); }
       else if (['groundOut', 'doublePlay'].includes(p.outcome)) { const fk = INF_MAP[p.sub] || 'SS'; animateFielder(fk, F[fk], ba.target, ba.dur); }
       else if (['single', 'double', 'triple', 'error'].includes(p.outcome)) { const ofk = OF_MAP[p.sub] || 'CF'; animateFielder(ofk, F[ofk], ba.target, ba.dur + 500); }
       animateBall(ba.path, ba.dur, () => { setBallPos(null); setMovingFielder(null); procRef.current = false; });
-      if (p.isHR) { setShowFW(true); setFwKey(k => k + 1); setTimeout(() => setShowFW(false), 4500); }
+      if (p.isHR) triggerFireworks();
     }, 1100);
     setTimeout(() => { setPitchPhase('idle'); setBatterPhase('stance'); }, 2500);
   }
