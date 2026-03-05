@@ -58,6 +58,9 @@ const DIRS = {
 
 const INF_MAP = { 'the shortstop': 'SS', 'the second baseman': 'F2B', 'the third baseman': 'F3B', 'the first baseman': 'F1B', 'the catcher': 'C' };
 const OF_MAP = { 'lf': 'LF', 'cf': 'CF', 'rf': 'RF' };
+const TEAM_COLORS = ['#b91c1c', '#1e40af'];
+const HIT_OUTCOMES = new Set(['single', 'double', 'triple', 'error']);
+const GROUND_OUTCOMES = new Set(['groundOut', 'doublePlay', 'bunt']);
 
 const CARD_MAP = {
   'A♣':'walk','2♣':'groundOut','3♣':'ball','4♣':'foulBall','5♣':'flyOut','6♣':'groundOut','7♣':'strikeout','8♣':'bunt','9♣':'single','10♣':'strike','J♣':'groundOut','Q♣':'foulOut','K♣':'ball',
@@ -125,7 +128,7 @@ function advanceRunners(bases, type, batterName) {
   return { bases: nb, runs };
 }
 
-function narrateLocal(oc, bat, bases, rs, outs, lockedFielderIdx = null) {
+function narrateLocal(oc, bat, bases, rs, outs) {
   const sc = rs > 0 ? (rs === 1 ? ` 1 run scores!` : ` ${rs} runs score!`) : '';
   let dir = 'cf', sub = '', variant = Math.floor(Math.random() * 3);
   const rd = pick(['lf', 'cf', 'rf']);
@@ -262,7 +265,7 @@ function CardAreaComp({ drawnPile, dispensedCard, dispensing, onDraw, canDraw, a
       <div className="min-w-[90px] pt-4">
         <div className="text-[10px] text-gray-400 font-bold uppercase mb-2 tracking-widest text-center text-gray-900">Inning Stack ({drawnPile.length})</div>
         <div className="relative w-16 h-24 mx-auto">
-            {drawnPile.map((card, i) => (<div key={i} className="absolute" style={{ top: Math.min(i * 0.6, 12), left: (i % 3) * 0.8, zIndex: i }}><MiniCard card={card} style={{ width: 50, height: 70, fontSize: 10 }} /></div>))}
+            {drawnPile.slice(-5).map((card, i) => (<div key={i} className="absolute" style={{ top: Math.min(i * 0.6, 12), left: (i % 3) * 0.8, zIndex: i }}><MiniCard card={card} style={{ width: 50, height: 70, fontSize: 10 }} /></div>))}
         </div>
       </div>
     </div>
@@ -396,7 +399,6 @@ function BaseballCardGameInner() {
   const animRef = useRef(null);
   const fielderAnimRef = useRef(null);
   const runnerAnimRef = useRef(null);
-  const logRef = useRef(null);
 
   useEffect(() => { sndRef.current = soundOn; }, [soundOn]);
   useEffect(() => { return () => { if (animRef.current) cancelAnimationFrame(animRef.current); if (runnerAnimRef.current) cancelAnimationFrame(runnerAnimRef.current); if (fielderAnimRef.current) cancelAnimationFrame(fielderAnimRef.current); }; }, []);
@@ -405,7 +407,18 @@ function BaseballCardGameInner() {
   function rerender() { setRenderTick(t => t + 1); }
   function triggerFireworks() { setShowFW(true); setFwKey(k => k + 1); setTimeout(() => setShowFW(false), 4500); }
   function addLog(text, type = 'play') { setLog(p => [...p, { text, type }]); }
-  function shuffleDeck() { deckRef.current = createDeck(); deckIdxRef.current = 0 };
+  function shuffleDeck() { deckRef.current = createDeck(); deckIdxRef.current = 0; }
+
+  function dispatchFielderAnim(oc, sub, ba) {
+    if (['flyOut', 'lineOut', 'foulOut'].includes(oc)) {
+      const fk = (oc === 'foulOut') ? 'C' : (OF_MAP[sub] || INF_MAP[sub]);
+      if (fk) animateFielder(fk, F[fk], ba.target, ba.dur);
+    } else if (GROUND_OUTCOMES.has(oc)) {
+      const fk = INF_MAP[sub] || 'SS'; animateFielder(fk, F[fk], ba.target, ba.dur);
+    } else if (HIT_OUTCOMES.has(oc)) {
+      const ofk = OF_MAP[sub] || 'CF'; animateFielder(ofk, F[ofk], ba.target, ba.dur + 500);
+    }
+  }
 
   function animateBall(path, dur, cb) {
     if (!path?.length) return;
@@ -472,7 +485,7 @@ function BaseballCardGameInner() {
     setActiveBatter(batter);
     if (oc === 'double' && SLUGGERS.has(batter) && Math.random() < 0.3) oc = 'homeRun';
     const res = calculatePlayResult(gs.current, oc, batter);
-    const nar = narrateLocal(oc, batter, gs.current.bases, res.runs, gs.current.outs, Math.floor(Math.random() * 5));
+    const nar = narrateLocal(oc, batter, gs.current.bases, res.runs, gs.current.outs);
     setDispensedCard(card); setDispensing(false); setTimeout(() => setDispensing(true), 30);
     if (sndRef.current) playSoundLocal('cardFlip');
     setPitchPhase('windup'); setBatterPhase('stance');
@@ -493,8 +506,8 @@ function BaseballCardGameInner() {
         setBatterPhase('swing'); if (sndRef.current && !['ball', 'strike', 'walk', 'hbp'].includes(oc)) playSoundLocal('hit'); 
         setAnnounceText(nar.text); 
         const isSacFly = res.isSacFly && ['flyOut', 'lineOut'].includes(oc);
-        if (['single', 'double', 'triple', 'homeRun', 'error', 'groundOut', 'doublePlay', 'bunt'].includes(oc) || isSacFly) {
-           animateRunners(computeRunnerPaths([...gs.current.bases], isSacFly ? 'sacFly' : (oc === 'bunt' ? 'single' : oc)), bt === 0 ? '#b91c1c' : '#1e40af', oc === 'homeRun' ? 6500 : 2500);
+        if (HIT_OUTCOMES.has(oc) || GROUND_OUTCOMES.has(oc) || oc === 'homeRun' || isSacFly) {
+           animateRunners(computeRunnerPaths([...gs.current.bases], isSacFly ? 'sacFly' : (oc === 'bunt' ? 'single' : oc)), TEAM_COLORS[bt], oc === 'homeRun' ? 6500 : 2500);
            if (['homeRun','single','double','triple'].includes(oc) || (oc==='bunt' && res.outsAdded===0)) setTimeout(() => setBatterPhase('gone'), 500);
            setTimeout(() => { gs.current.bases = res.nextBases; rerender(); }, oc === 'homeRun' ? 6500 : 2500);
         }
@@ -502,15 +515,8 @@ function BaseballCardGameInner() {
       setTimeout(() => {
         setPitchPhase('idle'); setOutcome(oc);
         const ba = genBallAnimLocal(oc, nar.dir, nar.sub, nar.variant);
-        const isH = ['single', 'double', 'triple', 'error'].includes(oc), isG = ['groundOut', 'doublePlay', 'bunt'].includes(oc);
-        if (['flyOut', 'lineOut', 'foulOut'].includes(oc)) {
-          const fk = (oc === 'foulOut') ? 'C' : (OF_MAP[nar.sub] || INF_MAP[nar.sub]);
-          if (fk) animateFielder(fk, F[fk], ba.target, ba.dur);
-        } else if (isG) {
-          const fk = INF_MAP[nar.sub] || 'SS'; animateFielder(fk, F[fk], ba.target, ba.dur);
-        } else if (isH) {
-          const ofk = OF_MAP[nar.sub] || 'CF'; animateFielder(ofk, F[ofk], ba.target, ba.dur + 500);
-        }
+        const isH = HIT_OUTCOMES.has(oc), isG = GROUND_OUTCOMES.has(oc);
+        dispatchFielderAnim(oc, nar.sub, ba);
         animateBall(ba.path, ba.dur, () => { 
           if (isH) {
             setTimeout(() => animateBall(linePts(ba.target, F.SS, 16), 550, () => animateBall(linePts(F.SS, F.P, 16), 550, () => { setBallPos(null); setMovingFielder(null); processOutcome(oc, card, nar, true, res); })), 600);
@@ -569,13 +575,11 @@ function BaseballCardGameInner() {
     setDrawnPile(p.pileSnapshot || []);
     setOutcome(null); setAnnounceText(''); setPitchPhase('windup'); setBatterPhase('stance'); setActiveBatter(p.batter);
     setTimeout(() => { setPitchPhase('throw'); animateBall(linePts(F.P, { x: F.HP.x, y: F.HP.y - 5 }, 16), 550); }, 550);
-    setTimeout(() => { if (doesSwing(p.outcome)) { setBatterPhase('swing'); if (sndRef.current && !['ball', 'strike', 'walk', 'hbp'].includes(p.outcome)) playSoundLocal('hit'); animateRunners(computeRunnerPaths([...p.preBases], p.outcome === 'bunt' ? 'single' : (p.resultData?.isSacFly ? 'sacFly' : p.outcome)), bt === 0 ? '#b91c1c' : '#1e40af', p.outcome === 'homeRun' ? 6500 : 2500); } }, 1050);
+    setTimeout(() => { if (doesSwing(p.outcome)) { setBatterPhase('swing'); if (sndRef.current && !['ball', 'strike', 'walk', 'hbp'].includes(p.outcome)) playSoundLocal('hit'); animateRunners(computeRunnerPaths([...p.preBases], p.outcome === 'bunt' ? 'single' : (p.resultData?.isSacFly ? 'sacFly' : p.outcome)), TEAM_COLORS[bt], p.outcome === 'homeRun' ? 6500 : 2500); } }, 1050);
     setTimeout(() => {
       setPitchPhase('idle'); setOutcome(p.outcome); setAnnounceText(p.narration);
       const ba = genBallAnimLocal(p.outcome, p.dir, p.sub, p.variant);
-      if (['flyOut', 'lineOut', 'foulOut'].includes(p.outcome)) { const fk = (p.outcome === 'foulOut') ? 'C' : (OF_MAP[p.sub] || INF_MAP[p.sub]); if (fk) animateFielder(fk, F[fk], ba.target, ba.dur); }
-      else if (['groundOut', 'doublePlay', 'bunt'].includes(p.outcome)) { const fk = INF_MAP[p.sub] || 'SS'; animateFielder(fk, F[fk], ba.target, ba.dur); }
-      else if (['single', 'double', 'triple', 'error'].includes(p.outcome)) { const ofk = OF_MAP[p.sub] || 'CF'; animateFielder(ofk, F[ofk], ba.target, ba.dur + 500); }
+      dispatchFielderAnim(p.outcome, p.sub, ba);
       animateBall(ba.path, ba.dur, () => { setBallPos(null); setMovingFielder(null); procRef.current = false; });
       if (p.isHR) triggerFireworks();
     }, 1100);
@@ -583,7 +587,8 @@ function BaseballCardGameInner() {
   }
 
   const baValue = (name, t) => { const s = statsRef.current[t][name]; return (!s || s.ab === 0) ? '.000' : (s.h / s.ab).toFixed(3).replace(/^0/, ''); };
-  const displayBases = useMemo(() => replayIdx !== -1 && playHistory[replayIdx] ? playHistory[replayIdx].preBases : gs.current.bases, [replayIdx, playHistory, renderTick]);
+  const displayBases = replayIdx !== -1 && playHistory[replayIdx] ? playHistory[replayIdx].preBases : gs.current.bases;
+  const reversedLog = useMemo(() => [...log].reverse(), [log]);
   const batterSide = useMemo(() => { const raw = PLAYER_HANDS[activeBatter] || 'R'; return raw === 'S' ? 'L' : raw; }, [activeBatter]);
 
   if (phase === 'setup') {
@@ -645,7 +650,7 @@ function BaseballCardGameInner() {
           <div className="flex bg-white rounded-lg border shadow-sm overflow-hidden h-10 text-gray-900">
             <button disabled={playHistory.length <= halfStartIdx || procRef.current} onClick={() => { const cur = replayIdx === -1 ? playHistory.length : replayIdx; const prev = cur > halfStartIdx ? (replayIdx === -1 ? playHistory.length-1 : replayIdx-1) : halfStartIdx; replayPlay(prev); }} className="px-4 hover:bg-gray-50 border-r disabled:opacity-20 cursor-pointer text-gray-900 text-gray-900">◄</button>
             <div className="px-4 flex items-center font-bold text-gray-500 uppercase text-[9px] tracking-widest">{replayIdx !== -1 ? `Play ${replayIdx + 1}` : 'REPLAY'}</div>
-            <button disabled={replayIdx === -1 || replayIdx >= playHistory.length - 1 || procRef.current} onClick={() => replayPlay(replayIdx + 1)} className="px-4 hover:bg-gray-50 disabled:opacity-20 cursor-pointer text-gray-900 text-gray-900 text-gray-900 text-gray-900 text-gray-900">►</button>
+            <button disabled={replayIdx === -1 || replayIdx >= playHistory.length - 1 || procRef.current} onClick={() => replayPlay(replayIdx + 1)} className="px-4 hover:bg-gray-50 disabled:opacity-20 cursor-pointer text-gray-900">►</button>
           </div>
 
           <div className="flex bg-white rounded-lg border shadow-sm overflow-hidden h-10 p-1 gap-2 items-center text-gray-900">
@@ -696,7 +701,7 @@ function BaseballCardGameInner() {
       )}
 
       <div className="max-w-[750px] mx-auto mt-6 flex gap-4 h-52 overflow-hidden items-stretch text-gray-900">
-        <div ref={logRef} className="flex-1 bg-white p-3 rounded-xl shadow-inner overflow-y-auto text-gray-900"><h3 className="text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-widest text-gray-900">Play-by-Play</h3>{log.slice().reverse().map((l, i) => <div key={i} className={`text-xs mb-1 ${l.type === 'homer' ? 'text-orange-600 font-bold' : 'text-gray-700'}`}>{l.text}</div>)}</div>
+        <div className="flex-1 bg-white p-3 rounded-xl shadow-inner overflow-y-auto text-gray-900"><h3 className="text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-widest text-gray-900">Play-by-Play</h3>{reversedLog.map((l, i) => <div key={i} className={`text-xs mb-1 ${l.type === 'homer' ? 'text-orange-600 font-bold' : 'text-gray-700'}`}>{l.text}</div>)}</div>
         <div className="w-80 bg-white p-3 rounded-xl shadow-inner overflow-hidden flex flex-col text-gray-900">
           <div className="flex justify-between items-center mb-2">
              <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-gray-900">Live Stats</h3>
@@ -709,7 +714,7 @@ function BaseballCardGameInner() {
               </div>
               <table className="w-full text-left border-collapse text-gray-900">
                 <thead className="sticky top-0 bg-white"><tr className="border-b border-gray-100 text-gray-400 uppercase font-bold text-[9px]"><th className="py-1">Player</th><th className="py-1 text-center w-8">AB</th><th className="py-1 text-center w-8">H</th><th className="py-1 text-center w-8">HR</th><th className="py-1 text-right w-12 text-right">AVG</th></tr></thead>
-                <tbody>{teams[statsTeamIdx].players.map((p, i) => { const s = statsRef.current[statsTeamIdx][p] || { ab: 0, h: 0, hr: 0 }; const isCurrent = statsTeamIdx === gs.current.half && gs.current.batterIdx[statsTeamIdx] === i; return (<tr key={i} className={`${isCurrent ? 'bg-blue-50 font-bold text-blue-900 text-blue-900' : 'text-gray-700'} border-b border-gray-50/50 hover:bg-stone-50 text-gray-900`}><td className="py-1.5 truncate max-w-[100px]">{p}</td><td className="py-1.5 text-center">{s.ab}</td><td className="py-1.5 text-center">{s.h}</td><td className="py-1.5 text-center">{s.hr}</td><td className="py-1.5 text-right font-mono">{baValue(p, statsTeamIdx)}</td></tr>);})}</tbody></table></div>
+                <tbody>{teams[statsTeamIdx].players.map((p, i) => { const s = statsRef.current[statsTeamIdx][p] || { ab: 0, h: 0, hr: 0 }; const isCurrent = statsTeamIdx === gs.current.half && gs.current.batterIdx[statsTeamIdx] === i; return (<tr key={i} className={`${isCurrent ? 'bg-blue-50 font-bold text-blue-900' : 'text-gray-700'} border-b border-gray-50/50 hover:bg-stone-50`}><td className="py-1.5 truncate max-w-[100px]">{p}</td><td className="py-1.5 text-center">{s.ab}</td><td className="py-1.5 text-center">{s.h}</td><td className="py-1.5 text-center">{s.hr}</td><td className="py-1.5 text-right font-mono">{baValue(p, statsTeamIdx)}</td></tr>);})}</tbody></table></div>
           ) : ( <div className="flex-1 flex items-center justify-center text-gray-300 italic text-center text-[9px]">Click 'Show' to see live batting stats</div> )}
         </div>
       </div>
