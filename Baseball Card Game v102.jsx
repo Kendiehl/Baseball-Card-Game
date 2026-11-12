@@ -14271,7 +14271,7 @@ function BaseballCardGameInner() {
   if (phase === 'setup') {
     return (
       <div className="min-h-screen bg-gray-100 flex flex-col items-center p-4 sm:p-10 font-sans text-gray-900">
-        <h1 className="text-4xl font-black text-blue-900 mb-2 tracking-tight uppercase">⚾ Card Baseball v100</h1>
+        <h1 className="text-4xl font-black text-blue-900 mb-2 tracking-tight uppercase">⚾ Card Baseball v102</h1>
         <div className="flex gap-10 flex-wrap justify-center max-w-4xl mt-12 text-gray-900">
           {[0, 1].map(t => (
             <div key={t} className="bg-white p-6 rounded-2xl shadow-xl w-80 max-w-full border-t-8 border-blue-900 text-gray-900">
